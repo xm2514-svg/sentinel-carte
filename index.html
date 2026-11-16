@@ -357,9 +357,24 @@ document.getElementById("handle").onclick = () => {
 };
 
 // ---------- Démarrage ----------
+let cible = null;                          // lien d'alerte : #c=<canal>&q=<lat>,<lon> -> carte zoomée sur l'incident
+function zoomCible(){
+  if (!cible) return;
+  map.setView(cible, 14);
+  let best = null, d = 1.5;                // ouvre la fiche de l'incident le plus proche (< 1,5 km)
+  for (const k in markers) { const x = km(cible, [markers[k].getLatLng().lat, markers[k].getLatLng().lng]); if (x < d) { d = x; best = k; } }
+  if (best) { markers[best].openPopup(); cible = null; }
+}
 function start(){
-  let topic = decodeURIComponent(location.hash.slice(1)) || store.get("sentinel_topic", "");
-  if (location.hash) { store.set("sentinel_topic", topic); history.replaceState(null, "", location.pathname); }
+  const h = decodeURIComponent(location.hash.slice(1));
+  let topic = store.get("sentinel_topic", "");
+  if (h.startsWith("c=")) {
+    const p = new URLSearchParams(h);
+    topic = p.get("c") || topic;
+    const q = coordsOf("q=" + (p.get("q") || ""));
+    if (q) cible = q;
+  } else if (h) topic = h;
+  if (h) { store.set("sentinel_topic", topic); history.replaceState(null, "", location.pathname); }
   if (!topic) {
     document.getElementById("setup").style.display = "flex";
     document.getElementById("save").onclick = () => {
@@ -371,6 +386,8 @@ function start(){
     };
   } else connect(topic);
   render();
+  zoomCible();
+  setTimeout(zoomCible, 3000);             // si l'alerte arrive juste après l'ouverture
 }
 start();
 addEventListener("hashchange", () => location.reload());
