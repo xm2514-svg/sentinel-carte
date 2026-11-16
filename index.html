@@ -245,14 +245,23 @@ async function majEtat(){
     const txt = await (await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/json?poll=1&since=3h`)).text();
     const last = txt.trim().split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(m => m.event === "message").pop();
     const h = last && /^[0-9A-F]{8}$/i.test(last.message.trim()) ? last.message.trim() : store.get("sentinel_etat", null);
-    if (!h || h === etatHash) return;
-    etatHash = h; store.set("sentinel_etat", h);
-    if (etat) map.removeLayer(etat);
-    etat = L.tileLayer(`https://wt3.autoroutes-trafic.fr//realtime/trafficstate/${h}/{z}/{x}/{y}.png`,
-      {maxNativeZoom:12, maxZoom:18, zIndex:5,   // SANEF ne dessine pas au-dela du zoom 12
-       errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",  // tuile vide = transparente
-       attribution:"Trafic © Autoroutes Trafic / SANEF"}).addTo(map);
+    setEtat(h);
+    if (!etatES) {                         // le code change toutes les ~5 min : on le suit en direct
+      etatES = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/sse`);
+      etatES.onmessage = e => { try { const m = JSON.parse(e.data); if (/^[0-9A-F]{8}$/i.test((m.message||"").trim())) setEtat(m.message.trim()); } catch(err) {} };
+    }
   } catch(e) {}
+}
+let etatES = null;
+function setEtat(h){
+  if (!h || h === etatHash) return;
+  etatHash = h; store.set("sentinel_etat", h);
+  const old = etat;                        // la nouvelle couche remplace l'ancienne une fois chargée (pas de clignotement)
+  etat = L.tileLayer(`https://wt3.autoroutes-trafic.fr//realtime/trafficstate/${h}/{z}/{x}/{y}.png`,
+    {maxNativeZoom:12, maxZoom:18, zIndex:5,   // SANEF ne dessine pas au-dela du zoom 12
+     errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",  // tuile vide = transparente
+     attribution:"Trafic © Autoroutes Trafic / SANEF"}).addTo(map);
+  if (old) { etat.once("load", () => map.removeLayer(old)); setTimeout(() => map.hasLayer(old) && map.removeLayer(old), 8000); }
 }
 majEtat(); setInterval(majEtat, 5*60e3);
 L.control.zoom({position:"bottomright"}).addTo(map);
