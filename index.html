@@ -223,6 +223,9 @@ function annonce(it){
 
 function purge(){
   const now = Date.now();
+  // bouchons SANEF reçus avant cette version : on relit la direction dans leur titre s'il y en a une
+  for (const k in S.items) { const o = S.items[k];
+    if (o.src === "sb" && !("dir" in o)) o.dir = ((/direction\s+([^,\n]+)/i.exec(o.where || "")) || [])[1] || ""; }
   for (const k in S.items) {
     const it = S.items[k];
     if (now - it.t > (it.src === "bf" || it.src === "sb" ? KEEP_BOU_MS : KEEP_MS)) delete S.items[k];
@@ -347,6 +350,10 @@ function render(){
       const cap = Math.atan2((it.b[1]-it.a[1]) * Math.cos(it.a[0]*Math.PI/180), it.b[0]-it.a[0]) * 180/Math.PI;
       html = `<div class="sens" style="transform:rotate(${cap}deg)"><span>▲</span></div>` + html +
              (it.dir ? `<div class="dirtag">→ ${esc(it.dir)}</div>` : "");
+    }
+    if (it.src === "bf") {                           // bouchon Bison Futé : direction donnée par Bison Futé (« … vers Paris »)
+      const v = /vers\s+([^—,\n]+)/i.exec(it.where || "");
+      if (v) html += `<div class="dirtag">→ ${esc(v[1].trim())}</div>`;
     }
     const icon = L.divIcon({className:"", iconSize:big?[38,38]:[30,30], html});
     if (it.code === "BOU" && it.src !== "sb") {          // (bouchon SANEF : déjà en rouge sur la couche SANEF)                               // bouchon tracé en rouge sur la route, sur sa longueur
