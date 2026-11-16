@@ -206,15 +206,19 @@ const OUVERTURE = Date.now();
 const ancienVoix = store.get("sentinel_voix", false);
 let voixNouv = store.get("sentinel_voix_nouv", ancienVoix);   // annonce des nouvelles alertes
 let voixAppr = store.get("sentinel_voix_appr", ancienVoix);   // alerte d'approche à 5 km
+const APP = window.SentinelApp || null;          // présent seulement dans l'appli Android SENTINEL
 function majBoutonVoix(){
   document.getElementById("voix").textContent = (voixNouv || voixAppr) ? "🔊" : "🔇";
   document.getElementById("rNouv").checked = voixNouv;
   document.getElementById("rAppr").checked = voixAppr;
+  if (APP) try { APP.reglages(voixNouv, voixAppr); } catch(e) {}
 }
 function dire(txt){
+  if (APP) { try { APP.dire(txt); } catch(e) {} return; }   // l'appli parle, même en arrière-plan
   try { const u = new SpeechSynthesisUtterance(txt); u.lang = "fr-FR"; u.rate = 1; speechSynthesis.speak(u); } catch(e) {}
 }
 function annonce(it){
+  if (APP) return;                                 // dans l'appli, c'est elle qui annonce les nouvelles alertes
   if (!voixNouv || !URGENT.has(it.code) || it.t < OUVERTURE - 5000) return;   // pas les anciennes alertes
   const lieu = String(it.where || "").replace(/\s*\/\s*/g, ", ").replace(/\s*—\s*/g, ", ");
   let txt = "Attention, " + (NAMES[it.code] || "incident").toLowerCase() + ", " + lieu;
@@ -495,12 +499,14 @@ function start(){
     if (q) cible = q;
   } else if (h) topic = h;
   if (h) { store.set("sentinel_topic", topic); history.replaceState(null, "", location.pathname); }
+  if (APP && topic) try { APP.canal(topic); } catch(e) {}
   if (!topic) {
     document.getElementById("setup").style.display = "flex";
     document.getElementById("save").onclick = () => {
       const v = document.getElementById("topic").value.trim();
       if (!v) return;
       store.set("sentinel_topic", v);
+      if (APP) try { APP.canal(v); } catch(e) {}
       document.getElementById("setup").style.display = "none";
       connect(v);
     };
