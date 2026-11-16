@@ -299,20 +299,22 @@ const map = L.map("map", {zoomControl:false, attributionControl:true}).setView([
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",   // passé en gris (CSS) : aucune route en rouge
   {maxZoom:18, className:"fond", attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
 // Couleurs du trafic SANEF (vert fluide, orange lent, rouge arrêté) : SENTINEL publie le code du jour sur <canal>-etat
-let etat = null, etatHash = null;
+let etat = null, etatHash = null, etatDiag = "pas encore essayé";
 async function majEtat(){
-  const topic = store.get("sentinel_topic", ""); if (!topic) return;
+  const topic = store.get("sentinel_topic", ""); if (!topic) { etatDiag = "canal inconnu"; return; }
+  etatDiag = "chargement…";
   try {
     const txt = await (await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/json?poll=1&since=3h`)).text();
     const last = txt.trim().split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(m => m.event === "message").pop();
     const h = last && /^[0-9A-F]{8}$/i.test(last.message.trim()) ? last.message.trim() : store.get("sentinel_etat", null);
-    if (last) noteVie(last.time);
+    etatDiag = h ? "code " + h : "aucun code reçu";
+    try { if (last) noteVie(last.time); } catch(e) { etatDiag += " (voyant : " + e.message + ")"; }
     setEtat(h);
     if (!etatES) {                         // le code change toutes les ~5 min : on le suit en direct
       etatES = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/sse`);
       etatES.onmessage = e => { try { const m = JSON.parse(e.data); if (m.event === "message") noteVie(m.time); if (/^[0-9A-F]{8}$/i.test((m.message||"").trim())) setEtat(m.message.trim()); } catch(err) {} };
     }
-  } catch(e) {}
+  } catch(e) { etatDiag = "erreur : " + e.message; }
 }
 let etatES = null;
 function setEtat(h){
@@ -326,6 +328,7 @@ function setEtat(h){
   if (old) { etat.once("load", () => map.removeLayer(old)); setTimeout(() => map.hasLayer(old) && map.removeLayer(old), 8000); }
 }
 majEtat(); setInterval(majEtat, 5*60e3);
+setInterval(() => { if (!etat) majEtat(); }, 30e3);   // couleurs absentes : on réessaie toutes les 30 s
 L.control.zoom({position:"bottomright"}).addTo(map);
 const layer = L.layerGroup().addTo(map);
 const markers = {};
@@ -429,7 +432,8 @@ function etatAppli(){
   det.innerHTML = `<b>${esc(txt)}</b><br>État : ${esc(e.etat || "—")} (${h(e.etat_t)})<br>` +
     `Dernière alerte reçue : ${h(e.recu_t)} ${esc((e.recu || "").slice(0, 60))}<br>` +
     `Dernière annonce : ${h(e.annonce_t)} ${esc((e.annonce || "").slice(0, 60))}` +
-    (e.erreur ? `<br>Dernière erreur : ${h(e.erreur_t)} ${esc(e.erreur.slice(0, 80))}` : "");
+    (e.erreur ? `<br>Dernière erreur : ${h(e.erreur_t)} ${esc(e.erreur.slice(0, 80))}` : "") +
+    `<br>Couleurs SANEF : ${etat ? "affichées (" + esc(etatHash) + ")" : esc(etatDiag)}`;
 }
 if (APP && APP.etat) { setTimeout(etatAppli, 1500); setInterval(etatAppli, 10e3); }
 function setDot(c){ reseau = (c === "live"); voyant(); }
