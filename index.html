@@ -26,7 +26,7 @@
   #vie.ok{color:var(--ok)} #vie.ko{color:var(--acc);font-weight:700}
   #count{margin-left:auto;color:var(--dim);font-size:14px}
   #stop{display:none;color:#ff8a8d}                       /* visible seulement dans l'appli Android */
-  #stop.confirmer{background:#c0272d;color:#fff;border-color:#c0272d}
+  #stop.confirmer{background:#c0272d;color:#fff;border-color:#c0272d;white-space:nowrap}
   .btn{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;
     padding:8px 12px;font-size:14px;cursor:pointer}
   #map{position:fixed;top:56px;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top) + 56px)}
@@ -90,7 +90,7 @@
   <div id="count">…</div>
   <button class="btn" id="voix" title="Annonces vocales">🔇</button>
   <button class="btn" id="locate" title="Ma position">◎</button>
-  <button class="btn" id="stop" title="Arrêter SENTINEL">🛑</button>
+  <button class="btn" id="stop" title="Couper les alertes sur ce téléphone">🛑</button>
 </div>
 <div id="reglages">
   <label><input type="checkbox" id="rNouv"> Annoncer les nouvelles alertes urgentes</label>
@@ -426,14 +426,15 @@ setInterval(voyant, 30e3);
 // Dans l'appli : le code des couleurs SANEF vient aussi de l'appli (sa connexion est la plus fiable)
 function couleursAppli(){ try { const h = APP && APP.couleurs ? APP.couleurs() : ""; if (/^[0-9A-F]{8}$/i.test(h)) setEtat(h); } catch(e) {} }
 if (APP && APP.couleurs) { setTimeout(() => { couleursAppli(); voyant(); }, 500); setInterval(couleursAppli, 30e3); }
-// Bouton ⏻ (appli seulement) : 1er appui -> « Arrêter ? » pendant 4 s ; 2e appui -> arrêt et fermeture
+// Bouton 🛑 (appli seulement) : coupe les alertes de CE téléphone (le programme SENTINEL continue pour les autres)
+// 1er appui -> « Couper les alertes ? » pendant 4 s ; 2e appui -> coupure et fermeture
 if (APP && APP.arreter) {
   const bStop = document.getElementById("stop");
   let attente = null;
   bStop.style.display = "block";
   bStop.onclick = () => {
     if (!attente) {
-      bStop.textContent = "Arrêter ?"; bStop.classList.add("confirmer");
+      bStop.textContent = "Couper ?"; bStop.classList.add("confirmer");
       attente = setTimeout(() => { bStop.textContent = "🛑"; bStop.classList.remove("confirmer"); attente = null; }, 4000);
       return;
     }
@@ -499,6 +500,7 @@ const APPROCHE_KM = 5;
 const derniereDist = {};
 let dejaPrevenu = store.get("sentinel_prevenu", {});
 function approche(){
+  try { if (APP && APP.approcheGeree && APP.approcheGeree()) return; } catch(e) {}   // l'appli s'en charge, même écran éteint
   if (!voixAppr || !me) return;
   for (const it of Object.values(S.items)) {
     if (!URGENT.has(it.code) || !it.at) continue;
@@ -570,7 +572,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v26";
+const VERSION_CARTE = "v27";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
