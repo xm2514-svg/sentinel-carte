@@ -347,7 +347,7 @@ function render(){
     if (!it.at) continue;
     const big = URGENT.has(it.code);
     let html = `<div class="pin${big?" big":" calm"}" style="border-color:${colorOf(it.code)}${big?";background:"+colorOf(it.code):""}">${ico(it.code)}</div>`;
-    if (it.src === "sb" && it.a && it.b) {           // sens de circulation : flèche + « → Metz »
+    if (it.src === "sb" && it.a && it.b && it.dir) { // sens de circulation (seulement si SENTINEL l'a calculé, 4.4.26+)
       const cap = Math.atan2((it.b[1]-it.a[1]) * Math.cos(it.a[0]*Math.PI/180), it.b[0]-it.a[0]) * 180/Math.PI;
       html = `<div class="sens" style="transform:rotate(${cap}deg)"><span>▲</span></div>` + html +
              (it.dir ? `<div class="dirtag">vers ${esc(it.dir)}</div>` : "");
