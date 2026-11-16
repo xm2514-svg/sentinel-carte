@@ -408,6 +408,7 @@ let vie = store.get("sentinel_vie", 0), reseau = true;
 function noteVie(t){ if (t*1000 > vie) { vie = t*1000; store.set("sentinel_vie", vie); voyant(); } }
 function voyant(){
   const dot = document.getElementById("dot"), txt = document.getElementById("vie");
+  try { if (APP && APP.vie) vie = Math.max(vie, Number(APP.vie()) || 0); } catch(e) {}   // l'appli suit SENTINEL en continu
   const min = Math.round((Date.now() - vie) / 60e3);
   if (!reseau)        { dot.className = "";     txt.className = "";   txt.textContent = "pas de réseau"; }
   else if (!vie)      { dot.className = "";     txt.className = "";   txt.textContent = "en attente de SENTINEL"; }
@@ -416,6 +417,9 @@ function voyant(){
          txt.textContent = "SENTINEL arrêté depuis " + (min < 120 ? min + " min" : Math.round(min/60) + " h"); }
 }
 setInterval(voyant, 30e3);
+// Dans l'appli : le code des couleurs SANEF vient aussi de l'appli (sa connexion est la plus fiable)
+function couleursAppli(){ try { const h = APP && APP.couleurs ? APP.couleurs() : ""; if (/^[0-9A-F]{8}$/i.test(h)) setEtat(h); } catch(e) {} }
+if (APP && APP.couleurs) { setTimeout(() => { couleursAppli(); voyant(); }, 500); setInterval(couleursAppli, 30e3); }
 
 // Dans l'appli Android : état du service qui écoute et parle en arrière-plan
 function etatAppli(){
