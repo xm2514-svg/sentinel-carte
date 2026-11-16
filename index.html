@@ -189,7 +189,7 @@ function dire(txt){
 }
 function annonce(it){
   if (!voixOn || !URGENT.has(it.code) || it.t < OUVERTURE - 5000) return;   // pas les anciennes alertes
-  const lieu = String(it.where || "").replace(/\s*\/\s*/g, ", ").replace(/—/g, ",");
+  const lieu = String(it.where || "").replace(/\s*\/\s*/g, ", ").replace(/\s*—\s*/g, ", ");
   let txt = "Attention, " + (NAMES[it.code] || "incident").toLowerCase() + ", " + lieu;
   if (me && it.at) txt += ", à " + Math.round(km(me, it.at)) + " kilomètres";
   dire(txt + ".");
@@ -385,16 +385,39 @@ document.getElementById("voix").onclick = () => {
   else { try { speechSynthesis.cancel(); } catch(e) {} }
 };
 majBoutonVoix();
+// ---------- Alerte d'approche : annonce à 5 km d'un urgent, quand on s'en rapproche, une fois ----------
+const APPROCHE_KM = 5;
+const derniereDist = {};
+let dejaPrevenu = store.get("sentinel_prevenu", {});
+function approche(){
+  if (!voixOn || !me) return;
+  for (const it of Object.values(S.items)) {
+    if (!URGENT.has(it.code) || !it.at) continue;
+    const d = km(me, it.at), avant = derniereDist[it.key];
+    derniereDist[it.key] = d;
+    if (dejaPrevenu[it.key] || avant === undefined) continue;
+    if (d <= APPROCHE_KM && d < avant - 0.05) {          // dans la zone ET en train de s'en rapprocher
+      dejaPrevenu[it.key] = Date.now();
+      for (const k in dejaPrevenu) if (Date.now() - dejaPrevenu[k] > 24*3600e3) delete dejaPrevenu[k];
+      store.set("sentinel_prevenu", dejaPrevenu);
+      const lieu = String(it.where || "").replace(/\s*\/\s*/g, ", ").replace(/\s*—\s*/g, ", ");
+      dire("Attention, " + (NAMES[it.code] || "incident").toLowerCase() + " à " + Math.max(1, Math.round(d)) + " kilomètres, " + lieu + ".");
+    }
+  }
+}
+let suivi = null;
 document.getElementById("locate").onclick = () => {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.watchPosition(p => {
+  if (!navigator.geolocation || suivi !== null) { if (me) map.flyTo(me, 11); return; }
+  suivi = navigator.geolocation.watchPosition(p => {
     const first = !me;
     me = [p.coords.latitude, p.coords.longitude];
     if (!meMarker) meMarker = L.marker(me, {icon:L.divIcon({className:"", html:'<div class="me"></div>', iconSize:[22,22]}), zIndexOffset:2000}).addTo(map);
     else meMarker.setLatLng(me);
-    if (first) { map.flyTo(me, 11); render(); }
-  }, () => {}, {enableHighAccuracy:true, maximumAge:30000});
+    if (first) { if (!cible) map.flyTo(me, 11); render(); }
+    approche();
+  }, () => {}, {enableHighAccuracy:true, maximumAge:15000});
 };
+if (voixOn) setTimeout(() => document.getElementById("locate").click(), 1500);   // voix active : on suit la position dès l'ouverture
 
 // ---------- Feuille du bas ----------
 document.getElementById("handle").onclick = () => {
