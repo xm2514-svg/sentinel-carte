@@ -249,7 +249,7 @@ async function majEtat(){
     etatHash = h; store.set("sentinel_etat", h);
     if (etat) map.removeLayer(etat);
     etat = L.tileLayer(`https://wt3.autoroutes-trafic.fr//realtime/trafficstate/${h}/{z}/{x}/{y}.png`,
-      {maxNativeZoom:13, maxZoom:18, zIndex:5,
+      {maxNativeZoom:12, maxZoom:18, zIndex:5,   // SANEF ne dessine pas au-dela du zoom 12
        errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",  // tuile vide = transparente
        attribution:"Trafic © Autoroutes Trafic / SANEF"}).addTo(map);
   } catch(e) {}
@@ -288,7 +288,7 @@ function render(){
     const big = URGENT.has(it.code);
     const icon = L.divIcon({className:"", iconSize:big?[38,38]:[30,30],
       html:`<div class="pin${big?" big":" calm"}" style="border-color:${colorOf(it.code)}${big?";background:"+colorOf(it.code):""}">${ico(it.code)}</div>`});
-    if (it.code === "BOU") {                               // bouchon tracé en rouge sur la route, sur sa longueur
+    if (it.code === "BOU" && it.src !== "sb") {          // (bouchon SANEF : déjà en rouge sur la couche SANEF)                               // bouchon tracé en rouge sur la route, sur sa longueur
       if (it.line) L.polyline(it.line, {color:colorOf("BOU"), weight:9, opacity:.85, lineCap:"round"}).addTo(layer);
       else traceJam(it);
     }
