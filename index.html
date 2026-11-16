@@ -409,7 +409,7 @@ function render(){
 
 // ---------- Connexion au canal ----------
 let es = null, timer = null;
-// Voyant : SENTINEL envoie un signal (code couleurs) à chaque scan, toutes les 5 min.
+// Voyant : SENTINEL envoie un signal (code couleurs) au plus toutes les 15 min (quota ntfy), + chaque alerte.
 let vie = store.get("sentinel_vie", 0), reseau = true;
 function noteVie(t){ if (t*1000 > vie) { vie = t*1000; store.set("sentinel_vie", vie); voyant(); } }
 function voyant(){
@@ -418,9 +418,9 @@ function voyant(){
   const min = Math.round((Date.now() - vie) / 60e3);
   if (!reseau)        { dot.className = "";     txt.className = "";   txt.textContent = "pas de réseau"; }
   else if (!vie)      { dot.className = "";     txt.className = "";   txt.textContent = "en attente de SENTINEL"; }
-  else if (min <= 12) { dot.className = "live"; txt.className = "ok"; txt.textContent = "SENTINEL actif"; }
+  else if (min <= 25) { dot.className = "live"; txt.className = "ok"; txt.textContent = "SENTINEL actif"; }
   else { dot.className = "off"; txt.className = "ko";
-         txt.textContent = "SENTINEL arrêté depuis " + (min < 120 ? min + " min" : Math.round(min/60) + " h"); }
+         txt.textContent = "Aucun signal de SENTINEL depuis " + (min < 120 ? min + " min" : Math.round(min/60) + " h"); }
 }
 setInterval(voyant, 30e3);
 // Dans l'appli : le code des couleurs SANEF vient aussi de l'appli (sa connexion est la plus fiable)
@@ -572,7 +572,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v27";
+const VERSION_CARTE = "v28";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
