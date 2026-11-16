@@ -1,5 +1,5 @@
 // Garde l'appli ouvrable sans réseau ; les alertes viennent toujours en direct de ntfy.
-const CACHE = "sentinel-carte-v18";
+const CACHE = "sentinel-carte-v19";
 const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png",
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
