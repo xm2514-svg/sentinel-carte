@@ -320,7 +320,7 @@ function span(it){
 function popup(it){
   const nav = it.at ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${it.at[0]},${it.at[1]}" target="_blank" rel="noopener">Itinéraire</a>` : "";
   return `<div class="pop"><h3>${esc(NAMES[it.code]||it.code)}</h3>${span(it)?`<div class="span">${esc(span(it))}</div>`:""}
-    <div>${esc(it.where)}</div>${it.desc?`<p>${esc(it.desc)}</p>`:""}
+    <div>${esc(it.where)}</div>${it.desc?`<p>${esc(it.desc.replace(/^De (.+?) à \1\./, "À $1."))}</p>`:""}
     <div class="when">Signalé ${esc(hhmm(it.t))}${it.num?" · #"+esc(it.num):""}</div>${nav}</div>`;
 }
 
