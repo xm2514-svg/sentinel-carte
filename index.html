@@ -90,12 +90,14 @@
   <div id="count">…</div>
   <button class="btn" id="voix" title="Annonces vocales">🔇</button>
   <button class="btn" id="locate" title="Ma position">◎</button>
-  <button class="btn" id="stop" title="Arrêter SENTINEL">⏻</button>
+  <button class="btn" id="stop" title="Arrêter SENTINEL">🛑</button>
 </div>
 <div id="reglages">
   <label><input type="checkbox" id="rNouv"> Annoncer les nouvelles alertes urgentes</label>
   <label><input type="checkbox" id="rAppr"> Alerte d'approche (5 km)</label>
   <div id="etatAppli"></div>
+  <div id="infos" style="font-size:13px;color:var(--dim);border-top:1px solid var(--line);padding-top:10px;line-height:1.5"></div>
+  <button class="btn" id="changerCanal">Changer de canal</button>
 </div>
 <div id="appliLigne"></div>
 <div id="map"></div>
@@ -108,6 +110,7 @@
   <p>Nom du canal ntfy (une seule fois, il reste sur cet appareil) :</p>
   <input id="topic" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="Nom du canal">
   <button class="btn" id="save" style="padding:12px;font-size:16px">Valider</button>
+  <p id="setupErr" style="color:#ff8a8d"></p>
 </div>
 
 <script>
@@ -431,7 +434,7 @@ if (APP && APP.arreter) {
   bStop.onclick = () => {
     if (!attente) {
       bStop.textContent = "Arrêter ?"; bStop.classList.add("confirmer");
-      attente = setTimeout(() => { bStop.textContent = "⏻"; bStop.classList.remove("confirmer"); attente = null; }, 4000);
+      attente = setTimeout(() => { bStop.textContent = "🛑"; bStop.classList.remove("confirmer"); attente = null; }, 4000);
       return;
     }
     clearTimeout(attente);
@@ -541,6 +544,40 @@ function zoomCible(){
   for (const k in markers) { const x = km(cible, [markers[k].getLatLng().lat, markers[k].getLatLng().lng]); if (x < d) { d = x; best = k; } }
   if (best) { markers[best].openPopup(); cible = null; }
 }
+// Nom du canal : vérifié avant d'être gardé (SENTINEL doit y avoir publié dans les 6 dernières heures)
+function demanderCanal(){
+  const box = document.getElementById("setup"), err = document.getElementById("setupErr"), bouton = document.getElementById("save");
+  box.style.display = "flex"; err.textContent = "";
+  bouton.onclick = async () => {
+    const v = document.getElementById("topic").value.trim();
+    if (!v) return;
+    bouton.disabled = true; err.textContent = "Vérification…";
+    let ok = false;
+    try {
+      const txt = await (await fetch(`https://ntfy.sh/${encodeURIComponent(v)}-etat/json?poll=1&since=6h`)).text();
+      ok = txt.split("\n").filter(Boolean).some(l => { try { return JSON.parse(l).event === "message"; } catch(e) { return false; } });
+      if (!ok) err.textContent = `Aucun signal de SENTINEL sur « ${v} ». Vérifiez l'orthographe : majuscules, tirets et chiffres comptent.`;
+    } catch(e) { err.textContent = "Pas de réseau : réessayez."; }
+    bouton.disabled = false;
+    if (!ok) return;
+    if (v !== store.get("sentinel_topic", "")) {           // nouveau canal : on oublie ce qui venait de l'ancien
+      for (const k of ["sentinel_state", "sentinel_vie", "sentinel_etat", "sentinel_prevenu"]) try { localStorage.removeItem(k); } catch(e) {}
+    }
+    store.set("sentinel_topic", v);
+    if (APP) try { APP.canal(v); } catch(e) {}
+    location.reload();
+  };
+}
+document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
+// Versions et canal, affichés dans le menu 🔊
+const VERSION_CARTE = "v26";
+function infos(){
+  let app = "";
+  try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
+  document.getElementById("infos").innerHTML = esc(app + "Carte " + VERSION_CARTE) + "<br>Canal : " + esc(store.get("sentinel_topic", "—"));
+}
+infos();
+
 function start(){
   const h = decodeURIComponent(location.hash.slice(1));
   let topic = store.get("sentinel_topic", "");
@@ -552,17 +589,7 @@ function start(){
   } else if (h) topic = h;
   if (h) { store.set("sentinel_topic", topic); history.replaceState(null, "", location.pathname); }
   if (APP && topic) try { APP.canal(topic); } catch(e) {}
-  if (!topic) {
-    document.getElementById("setup").style.display = "flex";
-    document.getElementById("save").onclick = () => {
-      const v = document.getElementById("topic").value.trim();
-      if (!v) return;
-      store.set("sentinel_topic", v);
-      if (APP) try { APP.canal(v); } catch(e) {}
-      document.getElementById("setup").style.display = "none";
-      connect(v);
-    };
-  } else connect(topic);
+  if (!topic) demanderCanal(); else connect(topic);
   render();
   zoomCible();
   setTimeout(zoomCible, 3000);             // si l'alerte arrive juste après l'ouverture
