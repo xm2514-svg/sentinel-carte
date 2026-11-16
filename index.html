@@ -69,6 +69,7 @@
   <div id="dot" title="Connexion"></div>
   <div><h1>SENTINEL</h1><div id="vie">…</div></div>
   <div id="count">…</div>
+  <button class="btn" id="voix" title="Annonces vocales">🔇</button>
   <button class="btn" id="locate" title="Ma position">◎</button>
 </div>
 <div id="map"></div>
@@ -116,6 +117,7 @@ function handle(msg){
   S.lastId = msg.id;
   const title = msg.title || "", body = msg.message || "", t = msg.time*1000;
   const lines = body.split("\n");
+  const avant = new Set(Object.keys(S.items));
 
   if (title.startsWith("🚨")) {                       // nouvel incident SANEF
     const tg = tagOf(lines[0]); if (!tg) return true;
@@ -174,7 +176,23 @@ function handle(msg){
       if (it.src === "sanef" && !actifs.has(it.num) && it.t < t) delete S.items[k];
     }
   }
+  for (const k in S.items) if (!avant.has(k)) annonce(S.items[k]);
   return true;
+}
+
+// ---------- Annonce vocale (urgents seulement, carte ouverte) ----------
+const OUVERTURE = Date.now();
+let voixOn = store.get("sentinel_voix", false);
+function majBoutonVoix(){ document.getElementById("voix").textContent = voixOn ? "🔊" : "🔇"; }
+function dire(txt){
+  try { const u = new SpeechSynthesisUtterance(txt); u.lang = "fr-FR"; u.rate = 1; speechSynthesis.speak(u); } catch(e) {}
+}
+function annonce(it){
+  if (!voixOn || !URGENT.has(it.code) || it.t < OUVERTURE - 5000) return;   // pas les anciennes alertes
+  const lieu = String(it.where || "").replace(/\s*\/\s*/g, ", ").replace(/—/g, ",");
+  let txt = "Attention, " + (NAMES[it.code] || "incident").toLowerCase() + ", " + lieu;
+  if (me && it.at) txt += ", à " + Math.round(km(me, it.at)) + " kilomètres";
+  dire(txt + ".");
 }
 
 function purge(){
@@ -361,6 +379,12 @@ function connect(topic){
 }
 
 // ---------- Position ----------
+document.getElementById("voix").onclick = () => {
+  voixOn = !voixOn; store.set("sentinel_voix", voixOn); majBoutonVoix();
+  if (voixOn) { dire("Annonces vocales activées."); if (!me) document.getElementById("locate").click(); }
+  else { try { speechSynthesis.cancel(); } catch(e) {} }
+};
+majBoutonVoix();
 document.getElementById("locate").onclick = () => {
   if (!navigator.geolocation) return;
   navigator.geolocation.watchPosition(p => {
