@@ -22,6 +22,8 @@
   #dot{width:10px;height:10px;border-radius:50%;background:var(--dim)}
   #dot.live{background:var(--ok);box-shadow:0 0 8px var(--ok)}
   #dot.off{background:var(--acc)}
+  #vie{font-size:11px;color:var(--dim);margin-top:1px}
+  #vie.ok{color:var(--ok)} #vie.ko{color:var(--acc);font-weight:700}
   #count{margin-left:auto;color:var(--dim);font-size:14px}
   .btn{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;
     padding:8px 12px;font-size:14px;cursor:pointer}
@@ -65,7 +67,7 @@
 <body>
 <div id="bar">
   <div id="dot" title="Connexion"></div>
-  <h1>SENTINEL</h1>
+  <div><h1>SENTINEL</h1><div id="vie">…</div></div>
   <div id="count">…</div>
   <button class="btn" id="locate" title="Ma position">◎</button>
 </div>
@@ -245,10 +247,11 @@ async function majEtat(){
     const txt = await (await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/json?poll=1&since=3h`)).text();
     const last = txt.trim().split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(m => m.event === "message").pop();
     const h = last && /^[0-9A-F]{8}$/i.test(last.message.trim()) ? last.message.trim() : store.get("sentinel_etat", null);
+    if (last) noteVie(last.time);
     setEtat(h);
     if (!etatES) {                         // le code change toutes les ~5 min : on le suit en direct
       etatES = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/sse`);
-      etatES.onmessage = e => { try { const m = JSON.parse(e.data); if (/^[0-9A-F]{8}$/i.test((m.message||"").trim())) setEtat(m.message.trim()); } catch(err) {} };
+      etatES.onmessage = e => { try { const m = JSON.parse(e.data); if (m.event === "message") noteVie(m.time); if (/^[0-9A-F]{8}$/i.test((m.message||"").trim())) setEtat(m.message.trim()); } catch(err) {} };
     }
   } catch(e) {}
 }
@@ -324,7 +327,20 @@ function render(){
 
 // ---------- Connexion au canal ----------
 let es = null, timer = null;
-function setDot(c){ document.getElementById("dot").className = c; }
+// Voyant : SENTINEL envoie un signal (code couleurs) à chaque scan, toutes les 5 min.
+let vie = store.get("sentinel_vie", 0), reseau = true;
+function noteVie(t){ if (t*1000 > vie) { vie = t*1000; store.set("sentinel_vie", vie); voyant(); } }
+function voyant(){
+  const dot = document.getElementById("dot"), txt = document.getElementById("vie");
+  const min = Math.round((Date.now() - vie) / 60e3);
+  if (!reseau)        { dot.className = "";     txt.className = "";   txt.textContent = "pas de réseau"; }
+  else if (!vie)      { dot.className = "";     txt.className = "";   txt.textContent = "en attente de SENTINEL"; }
+  else if (min <= 12) { dot.className = "live"; txt.className = "ok"; txt.textContent = "SENTINEL actif"; }
+  else { dot.className = "off"; txt.className = "ko";
+         txt.textContent = "SENTINEL arrêté depuis " + (min < 120 ? min + " min" : Math.round(min/60) + " h"); }
+}
+setInterval(voyant, 30e3);
+function setDot(c){ reseau = (c === "live"); voyant(); }
 function connect(topic){
   if (es) es.close();
   const since = S.lastId || "12h";
@@ -332,9 +348,16 @@ function connect(topic){
   es.onopen = () => setDot("live");
   es.onmessage = e => {
     let m; try{ m = JSON.parse(e.data); }catch(err){ return; }
+    if (m.event === "message") noteVie(m.time);
     if (handle(m)) { clearTimeout(timer); timer = setTimeout(render, 150); }
   };
-  es.onerror = () => setDot("off");   // EventSource se reconnecte tout seul
+  es.onerror = () => {                // EventSource se reconnecte tout seul, sauf si ntfy refuse (400)
+    setDot("off");
+    if (es.readyState === 2) {        // ex. : dernier message trop ancien, plus connu de ntfy -> on repart des 12 dernières heures
+      S.lastId = null; save();
+      setTimeout(() => connect(topic), 5000);
+    }
+  };
 }
 
 // ---------- Position ----------
