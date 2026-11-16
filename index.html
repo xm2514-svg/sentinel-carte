@@ -65,6 +65,11 @@
     flex-direction:column;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;
     box-shadow:0 6px 20px rgba(0,0,0,.5);font-size:15px}
   #reglages.ouvert{display:flex}
+  #etatAppli{display:none;font-size:13px;color:var(--dim);border-top:1px solid var(--line);padding-top:10px;line-height:1.5}
+  #appliLigne{display:none;position:fixed;left:0;right:0;z-index:999;top:calc(env(safe-area-inset-top) + 56px);
+    padding:4px 14px;font:600 12px system-ui,sans-serif;text-align:center}
+  #appliLigne.ok{display:block;background:#123222;color:var(--ok)}
+  #appliLigne.ko{display:block;background:#3a1518;color:#ff8a8d}
   #reglages label{display:flex;align-items:center;gap:10px;cursor:pointer}
   #reglages input{width:22px;height:22px;accent-color:var(--ok)}
   #setup{position:fixed;inset:0;z-index:2000;background:var(--bg);display:none;flex-direction:column;
@@ -87,7 +92,9 @@
 <div id="reglages">
   <label><input type="checkbox" id="rNouv"> Annoncer les nouvelles alertes urgentes</label>
   <label><input type="checkbox" id="rAppr"> Alerte d'approche (5 km)</label>
+  <div id="etatAppli"></div>
 </div>
+<div id="appliLigne"></div>
 <div id="map"></div>
 <div id="sheet" class="closed">
   <div id="handle">Incidents en cours <span id="sort">▲ ouvrir</span></div>
@@ -406,6 +413,25 @@ function voyant(){
          txt.textContent = "SENTINEL arrêté depuis " + (min < 120 ? min + " min" : Math.round(min/60) + " h"); }
 }
 setInterval(voyant, 30e3);
+
+// Dans l'appli Android : état du service qui écoute et parle en arrière-plan
+function etatAppli(){
+  if (!APP || !APP.etat) return;
+  let e = {}; try { e = JSON.parse(APP.etat()); } catch(err) { return; }
+  const h = t => t ? new Date(t).toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"}) : "—";
+  const ligne = document.getElementById("appliLigne"), det = document.getElementById("etatAppli");
+  let txt, ok = false;
+  if (!e.actif) txt = "Appli : surveillance ARRÊTÉE" + (!e.canal ? " (canal inconnu)" : !e.position ? " (position refusée)" : "");
+  else if (/reconnexion|réseau/i.test(e.etat || "")) txt = "Appli : pas de connexion aux alertes";
+  else { ok = true; txt = "Appli : à l'écoute en arrière-plan"; }
+  ligne.textContent = txt; ligne.className = ok ? "ok" : "ko";
+  det.style.display = "block";
+  det.innerHTML = `<b>${esc(txt)}</b><br>État : ${esc(e.etat || "—")} (${h(e.etat_t)})<br>` +
+    `Dernière alerte reçue : ${h(e.recu_t)} ${esc((e.recu || "").slice(0, 60))}<br>` +
+    `Dernière annonce : ${h(e.annonce_t)} ${esc((e.annonce || "").slice(0, 60))}` +
+    (e.erreur ? `<br>Dernière erreur : ${h(e.erreur_t)} ${esc(e.erreur.slice(0, 80))}` : "");
+}
+if (APP && APP.etat) { setTimeout(etatAppli, 1500); setInterval(etatAppli, 10e3); }
 function setDot(c){ reseau = (c === "live"); voyant(); }
 function connect(topic){
   if (es) es.close();
