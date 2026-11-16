@@ -45,8 +45,9 @@
   .pin{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;
     font-size:16px;line-height:1;border:3px solid;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.5)}
   .sens{position:absolute;left:-15px;top:-15px;width:68px;height:68px;pointer-events:none}
-  .sens span{position:absolute;left:50%;top:-4px;transform:translateX(-50%);color:#e5484d;font-size:18px;
-    text-shadow:0 0 3px #fff,0 0 3px #fff}
+  .sens{left:-21px;top:-21px;width:80px;height:80px}
+  .sens span{position:absolute;left:50%;top:-6px;transform:translateX(-50%);color:#fff;font-size:24px;line-height:1;
+    text-shadow:0 0 2px #111,0 0 4px #111,0 0 6px #111}
   .dirtag{position:absolute;left:50%;top:42px;transform:translateX(-50%);white-space:nowrap;background:#e5484d;color:#fff;
     font:700 12px system-ui,sans-serif;padding:2px 7px;border-radius:9px;box-shadow:0 1px 4px rgba(0,0,0,.4)}
   .pin.big{width:38px;height:38px;font-size:20px;animation:pulse 1.6s infinite}
@@ -349,11 +350,16 @@ function render(){
     if (it.src === "sb" && it.a && it.b) {           // sens de circulation : flèche + « → Metz »
       const cap = Math.atan2((it.b[1]-it.a[1]) * Math.cos(it.a[0]*Math.PI/180), it.b[0]-it.a[0]) * 180/Math.PI;
       html = `<div class="sens" style="transform:rotate(${cap}deg)"><span>▲</span></div>` + html +
-             (it.dir ? `<div class="dirtag">→ ${esc(it.dir)}</div>` : "");
+             (it.dir ? `<div class="dirtag">vers ${esc(it.dir)}</div>` : "");
     }
     if (it.src === "bf") {                           // bouchon Bison Futé : direction donnée par Bison Futé (« … vers Paris »)
       const v = /vers\s+([^—,\n]+)/i.exec(it.where || "");
-      if (v) html += `<div class="dirtag">→ ${esc(v[1].trim())}</div>`;
+      const c = targetOf(it.sens || it.where);       // ville visée : la flèche pointe vers elle
+      if (c && it.at) {
+        const cap = Math.atan2((c[2]-it.at[1]) * Math.cos(it.at[0]*Math.PI/180), c[1]-it.at[0]) * 180/Math.PI;
+        html = `<div class="sens" style="transform:rotate(${cap}deg)"><span>▲</span></div>` + html;
+      }
+      if (v) html += `<div class="dirtag">vers ${esc(v[1].trim())}</div>`;
     }
     const icon = L.divIcon({className:"", iconSize:big?[38,38]:[30,30], html});
     if (it.code === "BOU" && it.src !== "sb") {          // (bouchon SANEF : déjà en rouge sur la couche SANEF)                               // bouchon tracé en rouge sur la route, sur sa longueur
