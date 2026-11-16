@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SENTINEL Carte</title>
+<meta name="theme-color" content="#11151a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--bg:#11151a;--panel:#1a2027;--line:#2a323c;--txt:#e8edf2;--dim:#8b96a3;
+        --acc:#e5484d;--bou:#f0702a;--pan:#f5a524;--trv:#e8c547;--fer:#9b6cf0;--info:#3e9bf0;--ok:#30a46c}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font:15px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  #bar{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;gap:10px;
+    padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;background:var(--bg);border-bottom:1px solid var(--line)}
+  #bar h1{font-size:17px;margin:0;letter-spacing:.5px;font-weight:700}
+  #dot{width:10px;height:10px;border-radius:50%;background:var(--dim)}
+  #dot.live{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  #dot.off{background:var(--acc)}
+  #count{margin-left:auto;color:var(--dim);font-size:14px}
+  .btn{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;
+    padding:8px 12px;font-size:14px;cursor:pointer}
+  #map{position:fixed;top:56px;left:0;right:0;bottom:0;top:calc(env(safe-area-inset-top) + 56px)}
+  #sheet{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:var(--panel);
+    border-top:1px solid var(--line);border-radius:16px 16px 0 0;max-height:45vh;display:flex;flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom)}
+  #sheet.closed #list{display:none}
+  #handle{padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600}
+  #handle span{margin-left:auto;color:var(--dim);font-weight:400;font-size:13px}
+  #list{overflow-y:auto;border-top:1px solid var(--line)}
+  .row{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+  .row:active{background:#232b34}
+  .row .t{flex:1;min-width:0}
+  .row .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .t small{color:var(--dim)}
+  .row .d{color:var(--dim);font-size:13px;white-space:nowrap}
+  .tag{flex:none;min-width:42px;text-align:center;font-size:12px;font-weight:700;border-radius:6px;padding:3px 5px;color:#111}
+  .pin{display:flex;align-items:center;justify-content:center;width:38px;height:24px;border-radius:7px;
+    font:700 11px system-ui,sans-serif;color:#111;border:2px solid #111;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+  .pin.big{width:46px;height:28px;font-size:12px;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.7)}50%{box-shadow:0 0 0 9px rgba(229,72,77,0)}}
+  .me{width:16px;height:16px;border-radius:50%;background:var(--info);border:3px solid #fff;box-shadow:0 0 0 6px rgba(62,155,240,.25)}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--txt)}
+  .leaflet-popup-content{margin:12px 14px;font-size:14px}
+  .pop h3{margin:0 0 4px;font-size:15px}
+  .pop p{margin:6px 0;color:#c9d2db}
+  .pop .when{color:var(--dim);font-size:12px}
+  .pop a{display:inline-block;margin-top:6px;color:#111;background:var(--ok);padding:6px 10px;border-radius:8px;text-decoration:none;font-weight:600}
+  #setup{position:fixed;inset:0;z-index:2000;background:var(--bg);display:none;flex-direction:column;
+    justify-content:center;padding:24px;gap:14px}
+  #setup input{font-size:16px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--txt)}
+  #setup p{color:var(--dim);margin:0}
+  .empty{padding:16px 14px;color:var(--dim)}
+  .leaflet-bottom{bottom:calc(env(safe-area-inset-bottom) + 50px)}
+</style>
+</head>
+<body>
+<div id="bar">
+  <div id="dot" title="Connexion"></div>
+  <h1>SENTINEL</h1>
+  <div id="count">…</div>
+  <button class="btn" id="locate" title="Ma position">◎</button>
+</div>
+<div id="map"></div>
+<div id="sheet" class="closed">
+  <div id="handle">Incidents en cours <span id="sort">▲ ouvrir</span></div>
+  <div id="list"></div>
+</div>
+<div id="setup">
+  <h1 style="margin:0">SENTINEL Carte</h1>
+  <p>Nom du canal ntfy (une seule fois, il reste sur cet appareil) :</p>
+  <input id="topic" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="Nom du canal">
+  <button class="btn" id="save" style="padding:12px;font-size:16px">Valider</button>
+</div>
+
+<script>
+"use strict";
+// ---------- Réglages ----------
+const COLORS = {ACC:"--acc",FEU:"--acc",BOU:"--bou",PAN:"--pan",OBS:"--pan",AN:"--pan",
+                TRV:"--trv",RED:"--trv",FER:"--fer",INFO:"--info"};
+const NAMES  = {ACC:"Accident",FEU:"Incendie",BOU:"Bouchon",PAN:"Panne",OBS:"Obstacle",AN:"Animal",
+                TRV:"Travaux",RED:"Réduction de voies",FER:"Fermeture",INFO:"Info"};
+const URGENT = new Set(["ACC","FEU","BOU","FER"]);
+const KEEP_MS = 7*24*3600e3, KEEP_BOU_MS = 6*3600e3;
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const colorOf = c => css(COLORS[c] || "--info");
+
+// ---------- Etat (garde sur l'appareil) ----------
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+let S = store.get("sentinel_state", {items:{}, closed:{}, seen:[], lastId:null});
+const seen = new Set(S.seen);
+const save = () => { S.seen = [...seen].slice(-600); store.set("sentinel_state", S); };
+
+// ---------- Lecture des messages SENTINEL ----------
+const coordsOf = t => { const m = /q=(-?\d+\.\d+)(?:,|%2C)(-?\d+\.\d+)/.exec(t||""); return m ? [+m[1], +m[2]] : null; };
+const tagOf = line => /\[([A-Z]+)(?:·([\d.]+))?\s+#(\d+)\]/.exec(line||"");
+
+function handle(msg){
+  if (msg.event !== "message" || seen.has(msg.id)) return false;
+  seen.add(msg.id);
+  S.lastId = msg.id;
+  const title = msg.title || "", body = msg.message || "", t = msg.time*1000;
+  const lines = body.split("\n");
+
+  if (title.startsWith("🚨")) {                       // nouvel incident SANEF
+    const tg = tagOf(lines[0]); if (!tg) return true;
+    const num = tg[3];
+    if (S.closed[num] && S.closed[num] >= t) return true;
+    const desc = (body.split("\n\n")[1] || "").replace(/^\[[^\]]*\]\**\s*:\s*/, "").trim();
+    S.items["N"+num] = {key:"N"+num, code:tg[1], km:tg[2]||"", num, where:lines[0].replace(/\s+\[.*$/,"").trim(),
+                        desc, at:coordsOf(body), t, src:"sanef"};
+  }
+  else if (title.startsWith("✅ RÉSOLU")) {            // incident SANEF terminé
+    const tg = tagOf(lines[0]); if (!tg) return true;
+    S.closed[tg[3]] = t; delete S.items["N"+tg[3]];
+  }
+  else if (title.startsWith("🚗 BOUCHON")) {           // bouchon Bison Futé
+    const axe = (/BOUCHON\s+(.*?)\s+—/.exec(lines[0])||[])[1] || "";
+    const deb = ((/^Debut\s*:\s*(.*?)(\s*\|.*)?$/m.exec(body))||[])[1] || "";
+    const fin = ((/^Fin\s*:\s*(.*?)(\s*\|.*)?$/m.exec(body))||[])[1] || "";
+    const key = "B|"+axe+"|"+deb+"->"+fin;
+    const lng = (/Longueur\s*:\s*([^|\n]*)/.exec(body)||[])[1] || "";
+    const att = (/Attente\s*:\s*(.*)/.exec(body)||[])[1] || "";
+    S.items[key] = {key, code:"BOU", num:"", where:axe+" — "+lines[0].split("—").slice(1).join("—").trim(),
+                    desc:"De "+deb+(fin?" à "+fin:"")+". Longueur "+lng.trim()+", attente "+att.trim()+".",
+                    at:coordsOf(body), t, src:"bf"};
+  }
+  else if (title.startsWith("✅ BOUCHON RÉSOLU")) {
+    const m = /^(.*?)\s+—\s+(.*)$/.exec(lines[0]||"");
+    if (m) delete S.items["B|"+m[1]+"|"+m[2]];
+  }
+  else if (title.includes("BILAN ZONE")) {             // liste officielle des incidents actifs
+    const actifs = new Set();
+    for (const l of lines) {
+      const tg = tagOf(l); if (!tg) continue;
+      actifs.add(tg[3]);
+      if (!S.items["N"+tg[3]] && !(S.closed[tg[3]] >= t)) {
+        const where = (/ - (.*?)\s+https?:/.exec(l)||[])[1] || "";
+        S.items["N"+tg[3]] = {key:"N"+tg[3], code:tg[1], km:tg[2]||"", num:tg[3], where, desc:"", at:null, t, src:"sanef"};
+      }
+    }
+    for (const k in S.items) {
+      const it = S.items[k];
+      if (it.src === "sanef" && !actifs.has(it.num) && it.t < t) delete S.items[k];
+    }
+  }
+  return true;
+}
+
+function purge(){
+  const now = Date.now();
+  for (const k in S.items) {
+    const it = S.items[k];
+    if (now - it.t > (it.src === "bf" ? KEEP_BOU_MS : KEEP_MS)) delete S.items[k];
+  }
+  for (const n in S.closed) if (now - S.closed[n] > KEEP_MS) delete S.closed[n];
+}
+
+// ---------- Carte ----------
+const map = L.map("map", {zoomControl:false, attributionControl:true}).setView([49.1, 6.4], 9);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {maxZoom:18, attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+L.control.zoom({position:"bottomright"}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+const markers = {};
+let me = null, meMarker = null;
+
+const esc = s => String(s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hhmm = t => new Date(t).toLocaleString("fr-FR", {weekday:"short", hour:"2-digit", minute:"2-digit"});
+function km(a, b){
+  const R = 6371, r = x => x*Math.PI/180;
+  const d = Math.sin(r(b[0]-a[0])/2)**2 + Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(r(b[1]-a[1])/2)**2;
+  return 2*R*Math.asin(Math.sqrt(d));
+}
+function popup(it){
+  const nav = it.at ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${it.at[0]},${it.at[1]}" target="_blank" rel="noopener">Itinéraire</a>` : "";
+  return `<div class="pop"><h3>${esc(NAMES[it.code]||it.code)}${it.km?" · km "+esc(it.km):""}</h3>
+    <div>${esc(it.where)}</div>${it.desc?`<p>${esc(it.desc)}</p>`:""}
+    <div class="when">Signalé ${esc(hhmm(it.t))}${it.num?" · #"+esc(it.num):""}</div>${nav}</div>`;
+}
+
+function render(){
+  purge(); save();
+  layer.clearLayers();
+  for (const k in markers) delete markers[k];
+  const items = Object.values(S.items);
+  for (const it of items) {
+    if (!it.at) continue;
+    const big = URGENT.has(it.code);
+    const icon = L.divIcon({className:"", iconSize:big?[46,28]:[38,24],
+      html:`<div class="pin${big?" big":""}" style="background:${colorOf(it.code)}">${esc(it.code)}</div>`});
+    markers[it.key] = L.marker(it.at, {icon, zIndexOffset: big?1000:0}).bindPopup(popup(it)).addTo(layer);
+  }
+  const urg = items.filter(i => URGENT.has(i.code)).length;
+  document.getElementById("count").textContent = items.length + " en cours" + (urg ? " · " + urg + " urgent" + (urg>1?"s":"") : "");
+  // liste : par distance si position connue, sinon urgents puis récents
+  items.sort((a,b) => me && a.at && b.at ? km(me,a.at) - km(me,b.at)
+                    : (URGENT.has(b.code) - URGENT.has(a.code)) || b.t - a.t);
+  const list = document.getElementById("list");
+  list.innerHTML = items.length ? "" : '<div class="empty">Aucun incident en cours.</div>';
+  for (const it of items) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const dist = me && it.at ? Math.round(km(me, it.at)) + " km" : (it.at ? "" : "sans position");
+    row.innerHTML = `<div class="tag" style="background:${colorOf(it.code)}">${esc(it.code)}</div>
+      <div class="t"><b>${esc(it.where)}</b><small>${esc(NAMES[it.code]||it.code)} · ${esc(hhmm(it.t))}</small></div>
+      <div class="d">${esc(dist)}</div>`;
+    row.onclick = () => { if (!it.at) return; document.getElementById("handle").click(); map.flyTo(it.at, 14); setTimeout(() => markers[it.key] && markers[it.key].openPopup(), 600); };
+    list.appendChild(row);
+  }
+}
+
+// ---------- Connexion au canal ----------
+let es = null, timer = null;
+function setDot(c){ document.getElementById("dot").className = c; }
+function connect(topic){
+  if (es) es.close();
+  const since = S.lastId || "12h";
+  es = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}/sse?since=${encodeURIComponent(since)}`);
+  es.onopen = () => setDot("live");
+  es.onmessage = e => {
+    let m; try{ m = JSON.parse(e.data); }catch(err){ return; }
+    if (handle(m)) { clearTimeout(timer); timer = setTimeout(render, 150); }
+  };
+  es.onerror = () => setDot("off");   // EventSource se reconnecte tout seul
+}
+
+// ---------- Position ----------
+document.getElementById("locate").onclick = () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(p => {
+    const first = !me;
+    me = [p.coords.latitude, p.coords.longitude];
+    if (!meMarker) meMarker = L.marker(me, {icon:L.divIcon({className:"", html:'<div class="me"></div>', iconSize:[22,22]}), zIndexOffset:2000}).addTo(map);
+    else meMarker.setLatLng(me);
+    if (first) { map.flyTo(me, 11); render(); }
+  }, () => {}, {enableHighAccuracy:true, maximumAge:30000});
+};
+
+// ---------- Feuille du bas ----------
+document.getElementById("handle").onclick = () => {
+  const sh = document.getElementById("sheet");
+  sh.classList.toggle("closed");
+  document.getElementById("sort").textContent = sh.classList.contains("closed") ? "▲ ouvrir" : "▼ fermer";
+};
+
+// ---------- Démarrage ----------
+function start(){
+  let topic = decodeURIComponent(location.hash.slice(1)) || store.get("sentinel_topic", "");
+  if (location.hash) { store.set("sentinel_topic", topic); history.replaceState(null, "", location.pathname); }
+  if (!topic) {
+    document.getElementById("setup").style.display = "flex";
+    document.getElementById("save").onclick = () => {
+      const v = document.getElementById("topic").value.trim();
+      if (!v) return;
+      store.set("sentinel_topic", v);
+      document.getElementById("setup").style.display = "none";
+      connect(v);
+    };
+  } else connect(topic);
+  render();
+}
+start();
+addEventListener("hashchange", () => location.reload());
+setInterval(render, 60e3);   // purge et heures relatives
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
