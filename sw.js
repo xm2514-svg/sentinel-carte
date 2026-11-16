@@ -1,5 +1,5 @@
 // Garde l'appli ouvrable sans réseau ; les alertes viennent toujours en direct de ntfy.
-const CACHE = "sentinel-carte-v1";
+const CACHE = "sentinel-carte-v7";
 const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png",
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
@@ -9,7 +9,7 @@ self.addEventListener("activate", e => {
 });
 self.addEventListener("fetch", e => {
   const u = new URL(e.request.url);
-  if (e.request.method !== "GET" || u.hostname === "ntfy.sh") return;      // alertes : jamais en cache
+  if (e.request.method !== "GET" || u.hostname === "ntfy.sh" || u.hostname === "router.project-osrm.org" || u.hostname === "wt3.autoroutes-trafic.fr") return;   // jamais en cache
   if (u.hostname.endsWith("tile.openstreetmap.org")) {                     // fonds de carte : cache d'abord
     e.respondWith(caches.open(CACHE + "-tuiles").then(c => c.match(e.request).then(r =>
       r || fetch(e.request).then(n => { c.put(e.request, n.clone()); return n; }))));
