@@ -331,8 +331,11 @@ function setEtat(h){
     {maxNativeZoom:12, maxZoom:18, zIndex:5,   // SANEF ne dessine pas au-dela du zoom 12
      errorTileUrl:"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",  // tuile vide = transparente
      attribution:"Trafic © Autoroutes Trafic / SANEF"}).addTo(map);
-  if (old) { etat.once("load", () => map.removeLayer(old)); setTimeout(() => map.hasLayer(old) && map.removeLayer(old), 8000); }
+  // L'ancienne couche reste affichee jusqu'a ce que la nouvelle soit entierement chargee (plus de retrait force a 8 s)
+  const neuf = etat; couches.push(neuf);
+  neuf.once("load", () => { couches = couches.filter(c => c === neuf || (map.removeLayer(c), false)); });
 }
+let couches = [];
 majEtat(); setInterval(majEtat, 5*60e3);
 setInterval(() => { if (!etat) majEtat(); }, 30e3);   // couleurs absentes : on réessaie toutes les 30 s
 L.control.zoom({position:"bottomright"}).addTo(map);
@@ -463,7 +466,13 @@ function etatAppli(){
 }
 if (APP && APP.etat) { setTimeout(etatAppli, 1500); setInterval(etatAppli, 10e3); }
 function setDot(c){ reseau = (c === "live"); voyant(); }
+let canal = null;
+// Retour sur la carte (ou connexion bloquee) : si le lien avec ntfy n'est pas ouvert, on le refait
+function relancer(){ if (canal && (!es || es.readyState !== 1)) connect(canal); }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { relancer(); voyant(); } });
+setInterval(() => { if (es && es.readyState === 0) relancer(); }, 60e3);
 function connect(topic){
+  canal = topic;
   if (es) es.close();
   const since = S.lastId || "12h";
   es = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}/sse?since=${encodeURIComponent(since)}`);
@@ -572,7 +581,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v28";
+const VERSION_CARTE = "v29";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
