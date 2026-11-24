@@ -336,6 +336,9 @@ function setEtat(h){
   neuf.once("load", () => { couches = couches.filter(c => c === neuf || (map.removeLayer(c), false)); });
 }
 let couches = [];
+// Le dessin SANEF est le meme quel que soit le code (le code ne sert qu'a eviter le cache) :
+// on affiche tout de suite avec le dernier code connu, sans attendre ntfy ni l'appli.
+setEtat(store.get("sentinel_etat", null) || "00000000");
 majEtat(); setInterval(majEtat, 5*60e3);
 setInterval(() => { if (!etat) majEtat(); }, 30e3);   // couleurs absentes : on réessaie toutes les 30 s
 L.control.zoom({position:"bottomright"}).addTo(map);
@@ -581,7 +584,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v29";
+const VERSION_CARTE = "v30";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
@@ -600,7 +603,7 @@ function start(){
   } else if (h) topic = h;
   if (h) { store.set("sentinel_topic", topic); history.replaceState(null, "", location.pathname); }
   if (APP && topic) try { APP.canal(topic); } catch(e) {}
-  if (!topic) demanderCanal(); else connect(topic);
+  if (!topic) demanderCanal(); else { connect(topic); majEtat(); }
   render();
   zoomCible();
   setTimeout(zoomCible, 3000);             // si l'alerte arrive juste après l'ouverture
