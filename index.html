@@ -333,7 +333,10 @@ function setEtat(h){
      attribution:"Trafic © Autoroutes Trafic / SANEF"}).addTo(map);
   // L'ancienne couche reste affichee jusqu'a ce que la nouvelle soit entierement chargee (plus de retrait force a 8 s)
   const neuf = etat; couches.push(neuf);
-  neuf.once("load", () => { couches = couches.filter(c => c === neuf || (map.removeLayer(c), false)); });
+  // v31 : une couche dont toutes les tuiles ont echoue (telephone en veille, reseau coupe) ne remplace PAS l'ancienne
+  let bonnes = 0; neuf.on("tileload", e => { if (!e.tile.src.startsWith("data:")) bonnes++; });   // la tuile vide d'erreur declenche aussi tileload
+  const fini = () => { if (!bonnes) return; neuf.off("load", fini); couches = couches.filter(c => c === neuf || (map.removeLayer(c), false)); };
+  neuf.on("load", fini);
 }
 let couches = [];
 // Le dessin SANEF est le meme quel que soit le code (le code ne sert qu'a eviter le cache) :
@@ -472,7 +475,7 @@ function setDot(c){ reseau = (c === "live"); voyant(); }
 let canal = null;
 // Retour sur la carte (ou connexion bloquee) : si le lien avec ntfy n'est pas ouvert, on le refait
 function relancer(){ if (canal && (!es || es.readyState !== 1)) connect(canal); }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { relancer(); voyant(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { relancer(); voyant(); if (etat) etat.redraw(); } });   // v31 : retour a l'ecran -> tuiles SANEF rechargees tout de suite
 setInterval(() => { if (es && es.readyState === 0) relancer(); }, 60e3);
 function connect(topic){
   canal = topic;
@@ -584,7 +587,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v30";
+const VERSION_CARTE = "v31";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
