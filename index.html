@@ -411,7 +411,7 @@ function render(){
     row.innerHTML = `<div class="tag" style="background:${colorOf(it.code)}">${ico(it.code)} ${esc(it.code)}</div>
       <div class="t"><b>${esc(it.where)}</b><small>${esc(NAMES[it.code]||it.code)}${span(it)?" · "+esc(span(it)):""} · ${esc(hhmm(it.t))}</small></div>
       <div class="d">${esc(dist)}</div>`;
-    row.onclick = () => { if (!it.at) return; document.getElementById("handle").click(); map.flyTo(it.at, 14); setTimeout(() => markers[it.key] && markers[it.key].openPopup(), 600); };
+    row.onclick = () => { if (!it.at) return; document.getElementById("handle").click(); suivre = false; map.flyTo(it.at, 14); setTimeout(() => markers[it.key] && markers[it.key].openPopup(), 600); };
     list.appendChild(row);
   }
 }
@@ -532,14 +532,19 @@ function approche(){
   }
 }
 let suivi = null;
+// v33 : la carte suit le vehicule ; deplacer la carte a la main met le suivi en pause, le bouton de position le reprend
+let suivre = true;
+map.on("dragstart", () => { suivre = false; });
 document.getElementById("locate").onclick = () => {
-  if (!navigator.geolocation || suivi !== null) { if (me) map.flyTo(me, 11); return; }
+  suivre = true;
+  if (!navigator.geolocation || suivi !== null) { if (me) map.flyTo(me, Math.max(map.getZoom(), 11)); return; }
   suivi = navigator.geolocation.watchPosition(p => {
     const first = !me;
     me = [p.coords.latitude, p.coords.longitude];
     if (!meMarker) meMarker = L.marker(me, {icon:L.divIcon({className:"", html:'<div class="me"></div>', iconSize:[22,22]}), zIndexOffset:2000}).addTo(map);
     else meMarker.setLatLng(me);
     if (first) { if (!cible) map.flyTo(me, 11); render(); }
+    else if (suivre && !document.hidden) map.panTo(me);
     approche();
   }, () => {}, {enableHighAccuracy:true, maximumAge:15000});
 };
@@ -556,7 +561,7 @@ document.getElementById("handle").onclick = () => {
 let cible = null;                          // lien d'alerte : #c=<canal>&q=<lat>,<lon> -> carte zoomée sur l'incident
 function zoomCible(){
   if (!cible) return;
-  map.setView(cible, 14);
+  suivre = false; map.setView(cible, 14);
   let best = null, d = 1.5;                // ouvre la fiche de l'incident le plus proche (< 1,5 km)
   for (const k in markers) { const x = km(cible, [markers[k].getLatLng().lat, markers[k].getLatLng().lng]); if (x < d) { d = x; best = k; } }
   if (best) { markers[best].openPopup(); cible = null; }
@@ -587,7 +592,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v32";
+const VERSION_CARTE = "v33";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
