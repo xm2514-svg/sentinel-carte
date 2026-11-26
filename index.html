@@ -427,7 +427,7 @@ function voyant(){
   const min = Math.round((Date.now() - vie) / 60e3);
   if (!reseau)        { dot.className = "";     txt.className = "";   txt.textContent = "pas de réseau"; }
   else if (!vie)      { dot.className = "";     txt.className = "";   txt.textContent = "en attente de SENTINEL"; }
-  else if (min <= 25) { dot.className = "live"; txt.className = "ok"; txt.textContent = "SENTINEL actif"; }
+  else if (min <= 70) { dot.className = "live"; txt.className = "ok"; txt.textContent = "SENTINEL actif"; }   // v35 : signal de vie horaire (4.4.36)
   else { dot.className = "off"; txt.className = "ko";
          txt.textContent = "Aucun signal de SENTINEL depuis " + (min < 120 ? min + " min" : Math.round(min/60) + " h"); }
 }
@@ -597,7 +597,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v34";
+const VERSION_CARTE = "v35";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
