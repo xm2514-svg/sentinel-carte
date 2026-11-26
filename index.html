@@ -534,7 +534,9 @@ function approche(){
 let suivi = null;
 // v33 : la carte suit le vehicule ; deplacer la carte a la main met le suivi en pause, le bouton de position le reprend
 let suivre = true;
-map.on("dragstart", () => { suivre = false; });
+// v34 : le suivi reprend tout seul 15 s apres le dernier deplacement a la main (un effleurement suffisait a le couper)
+let toucheT = 0;
+map.on("dragstart drag dragend", () => { suivre = false; toucheT = Date.now(); });
 document.getElementById("locate").onclick = () => {
   suivre = true;
   if (!navigator.geolocation || suivi !== null) { if (me) map.flyTo(me, Math.max(map.getZoom(), 11)); return; }
@@ -544,7 +546,10 @@ document.getElementById("locate").onclick = () => {
     if (!meMarker) meMarker = L.marker(me, {icon:L.divIcon({className:"", html:'<div class="me"></div>', iconSize:[22,22]}), zIndexOffset:2000}).addTo(map);
     else meMarker.setLatLng(me);
     if (first) { if (!cible) map.flyTo(me, 11); render(); }
-    else if (suivre && !document.hidden) map.panTo(me);
+    else {
+      if (!suivre && toucheT && Date.now() - toucheT > 15000) suivre = true;
+      if (suivre && !document.hidden) map.panTo(me);
+    }
     approche();
   }, () => {}, {enableHighAccuracy:true, maximumAge:15000});
 };
@@ -592,7 +597,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v33";
+const VERSION_CARTE = "v34";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
