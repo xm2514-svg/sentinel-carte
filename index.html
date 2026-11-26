@@ -306,19 +306,22 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",   // passé en
   {maxZoom:18, className:"fond", attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
 // Couleurs du trafic SANEF (vert fluide, orange lent, rouge arrêté) : SENTINEL publie le code du jour sur <canal>-etat
 let etat = null, etatHash = null, etatDiag = "pas encore essayé";
+// v32 : un code SANEF expire en moins de 20 min. Dans l'appli, seul le code frais de l'appli sert (celui de ntfy
+// peut etre perime et faisait alterner une couche vide) ; ntfy ne sert que tant que l'appli n'a pas donne de code.
+let codeAppli = false;
 async function majEtat(){
   const topic = store.get("sentinel_topic", ""); if (!topic) { etatDiag = "canal inconnu"; return; }
   etatDiag = "chargement…";
   try {
     const txt = await (await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/json?poll=1&since=3h`)).text();
     const last = txt.trim().split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(m => m.event === "message").pop();
-    const h = last && /^[0-9A-F]{8}$/i.test(last.message.trim()) ? last.message.trim() : store.get("sentinel_etat", null);
+    const h = last && /^[0-9A-F]{8}$/i.test(last.message.trim()) ? last.message.trim() : null;
     etatDiag = h ? "code " + h : "aucun code reçu";
     try { if (last) noteVie(last.time); } catch(e) { etatDiag += " (voyant : " + e.message + ")"; }
-    setEtat(h);
+    if (!codeAppli) setEtat(h);
     if (!etatES) {                         // le code change toutes les ~5 min : on le suit en direct
       etatES = new EventSource(`https://ntfy.sh/${encodeURIComponent(topic)}-etat/sse`);
-      etatES.onmessage = e => { try { const m = JSON.parse(e.data); if (m.event === "message") noteVie(m.time); if (/^[0-9A-F]{8}$/i.test((m.message||"").trim())) setEtat(m.message.trim()); } catch(err) {} };
+      etatES.onmessage = e => { try { const m = JSON.parse(e.data); if (m.event === "message") noteVie(m.time); if (!codeAppli && /^[0-9A-F]{8}$/i.test((m.message||"").trim())) setEtat(m.message.trim()); } catch(err) {} };
     }
   } catch(e) { etatDiag = "erreur : " + e.message; }
 }
@@ -339,9 +342,6 @@ function setEtat(h){
   neuf.on("load", fini);
 }
 let couches = [];
-// Le dessin SANEF est le meme quel que soit le code (le code ne sert qu'a eviter le cache) :
-// on affiche tout de suite avec le dernier code connu, sans attendre ntfy ni l'appli.
-setEtat(store.get("sentinel_etat", null) || "00000000");
 majEtat(); setInterval(majEtat, 5*60e3);
 setInterval(() => { if (!etat) majEtat(); }, 30e3);   // couleurs absentes : on réessaie toutes les 30 s
 L.control.zoom({position:"bottomright"}).addTo(map);
@@ -433,7 +433,7 @@ function voyant(){
 }
 setInterval(voyant, 30e3);
 // Dans l'appli : le code des couleurs SANEF vient aussi de l'appli (sa connexion est la plus fiable)
-function couleursAppli(){ try { const h = APP && APP.couleurs ? APP.couleurs() : ""; if (/^[0-9A-F]{8}$/i.test(h)) setEtat(h); } catch(e) {} }
+function couleursAppli(){ try { const h = APP && APP.couleurs ? APP.couleurs() : ""; if (/^[0-9A-F]{8}$/i.test(h)) { codeAppli = true; setEtat(h); } } catch(e) {} }
 if (APP && APP.couleurs) { setTimeout(() => { couleursAppli(); voyant(); }, 500); setInterval(couleursAppli, 30e3); }
 // Bouton 🛑 (appli seulement) : coupe les alertes de CE téléphone (le programme SENTINEL continue pour les autres)
 // 1er appui -> « Couper les alertes ? » pendant 4 s ; 2e appui -> coupure et fermeture
@@ -587,7 +587,7 @@ function demanderCanal(){
 }
 document.getElementById("changerCanal").onclick = () => { document.getElementById("topic").value = store.get("sentinel_topic", ""); demanderCanal(); };
 // Versions et canal, affichés dans le menu 🔊
-const VERSION_CARTE = "v31";
+const VERSION_CARTE = "v32";
 function infos(){
   let app = "";
   try { if (APP && APP.version) app = "Appli SENTINEL Pro " + APP.version() + " · "; } catch(e) {}
